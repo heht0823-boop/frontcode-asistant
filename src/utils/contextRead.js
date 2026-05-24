@@ -21,14 +21,35 @@ function getProjectRoot() {
 export function readSystem() {
   const projectRoot = getProjectRoot();
   const systemDocPath = join(projectRoot, "src", "docs", "systemDoc.md");
+  const skillTemplatePath = join(
+    projectRoot,
+    "src",
+    "docs",
+    "skillTemplate.md",
+  );
 
   try {
-    const content = readFileSync(systemDocPath, "utf-8");
+    let result = readFileSync(systemDocPath, "utf-8");
     const systemInfo = `${os.type()} ${os.release()} (${os.platform()})`;
     const workPath = projectRoot;
 
-    let result = content.replace(/\${systemInfo}/g, systemInfo);
+    result = result.replace(/\${systemInfo}/g, systemInfo);
     result = result.replace(/\${workPath}/g, workPath);
+
+    let skillTemplate = "";
+    try {
+      skillTemplate = readFileSync(skillTemplatePath, "utf-8");
+    } catch {
+      skillTemplate = "当前有如下skill:\n${skillcontent}";
+    }
+
+    const skillsContext = getSkillsContext();
+    const processedSkillTemplate = skillTemplate.replace(
+      /\${skillcontent}/g,
+      skillsContext,
+    );
+
+    result = result + "\n\n" + processedSkillTemplate;
 
     return result;
   } catch (error) {
@@ -233,4 +254,146 @@ export function matchRulesForFile(filePath, rulesMap) {
     }
   }
   return "";
+}
+
+/**
+ * 从 SKILL.md 内容中解析 name 和 description
+ * @param {string} content - SKILL.md 文件内容
+ * @returns {{name: string, description: string}} 技能名称和描述
+ */
+function parseSkillInfo(content) {
+  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/;
+  const match = content.match(frontmatterRegex);
+
+  if (!match || !match[1]) {
+    return { name: "", description: "" };
+  }
+
+  const frontmatter = match[1];
+  const nameMatch = frontmatter.match(/name:\s*(.+)/);
+  const descMatch = frontmatter.match(/description:\s*(.+)/);
+
+  return {
+    name: nameMatch ? nameMatch[1].trim() : "",
+    description: descMatch ? descMatch[1].trim() : "",
+  };
+}
+
+/**
+ * 读取 skills 目录下所有技能
+ * @param {string} skillsDir - skills 目录路径
+ * @returns {Array<{name: string, description: string, dirPath: string}>} 技能信息数组
+ */
+function readSkillsFromDir(skillsDir) {
+  const skills = [];
+
+  if (!existsSync(skillsDir)) {
+    return skills;
+  }
+
+  try {
+    const skillDirs = readdirSync(skillsDir);
+
+    for (const skillDir of skillDirs) {
+      const skillDirPath = join(skillsDir, skillDir);
+      const skillFilePath = join(skillDirPath, "SKILL.md");
+
+      try {
+        const stat = statSync(skillDirPath);
+        if (stat.isDirectory() && existsSync(skillFilePath)) {
+          const content = readFileSync(skillFilePath, "utf-8");
+          const { name, description } = parseSkillInfo(content);
+
+          if (name) {
+            skills.push({
+              name,
+              description,
+              dirPath: skillDirPath,
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`读取技能目录失败 ${skillDirPath}: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    console.error(`读取 skills 目录失败 ${skillsDir}: ${error.message}`);
+  }
+
+  return skills;
+}
+
+/**
+ * 读取所有技能信息（名称和描述）
+ * @returns {Array<{name: string, description: string, dirPath: string}>} 技能信息数组
+ */
+export function readSkills() {
+  const projectRoot = getProjectRoot();
+  const skills = [];
+
+  const srcSkillsPath = join(projectRoot, "src", ".front", "skills");
+  const projectSkillsPath = join(projectRoot, "front", "skills");
+
+  skills.push(...readSkillsFromDir(srcSkillsPath));
+  skills.push(...readSkillsFromDir(projectSkillsPath));
+
+  return skills;
+}
+
+/**
+ * 根据技能名称获取技能详情（完整内容）
+ * @param {string} skillName - 技能名称
+ * @returns {string} 技能完整内容，如果没有找到返回空字符串
+ */
+export function getSkillDetail(skillName) {
+  const projectRoot = getProjectRoot();
+
+  const srcSkillsPath = join(projectRoot, "src", ".front", "skills");
+  const projectSkillsPath = join(projectRoot, "front", "skills");
+
+  for (const skillsDir of [srcSkillsPath, projectSkillsPath]) {
+    if (!existsSync(skillsDir)) {
+      continue;
+    }
+
+    try {
+      const skillDirs = readdirSync(skillsDir);
+
+      for (const skillDir of skillDirs) {
+        const skillDirPath = join(skillsDir, skillDir);
+        const skillFilePath = join(skillDirPath, "SKILL.md");
+
+        if (existsSync(skillFilePath)) {
+          const content = readFileSync(skillFilePath, "utf-8");
+          const { name } = parseSkillInfo(content);
+
+          if (name === skillName) {
+            return content;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`查找技能失败 ${skillName}: ${error.message}`);
+    }
+  }
+
+  return "";
+}
+
+/**
+ * 获取技能上下文（用于替换模板中的 ${skillcontent}）
+ * @returns {string} 格式化的技能列表
+ */
+export function getSkillsContext() {
+  const skills = readSkills();
+
+  if (skills.length === 0) {
+    return "";
+  }
+
+  const formattedSkills = skills
+    .map((skill) => `- **${skill.name}**: ${skill.description}`)
+    .join("\n");
+
+  return `技能列表:\n${formattedSkills}`;
 }
