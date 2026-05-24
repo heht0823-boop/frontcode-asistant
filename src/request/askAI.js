@@ -1,14 +1,21 @@
+/**
+ * OpenAI API 请求模块
+ */
 import OpenAI from "openai";
 import { loadConfig } from "../utils/config.js";
+import { readSystem } from "../utils/contextRead.js";
 
 /**
  * 调用 OpenAI 模型进行对话
  * @param {Array<Object>} history - 对话历史记录，每条消息包含 role 和 content
- * @returns {string} 模型返回的响应文本
+ * @returns {Promise<string>} 模型返回的响应文本
  */
 export async function askAIModel(history) {
   // 加载配置
   const config = await loadConfig();
+
+  // 读取系统文档作为系统提示词
+  const systemPrompt = await readSystem();
 
   // 创建 OpenAI 客户端实例
   const openai = new OpenAI({
@@ -16,10 +23,19 @@ export async function askAIModel(history) {
     baseURL: config.baseURL,
   });
 
+  // 构建消息列表：系统提示词 + 对话历史
+  const messages = [
+    {
+      role: "system",
+      content: systemPrompt,
+    },
+    ...history,
+  ];
+
   // 调用 chat.completions.create 接口发送请求
   const response = await openai.chat.completions.create({
     model: config.model,
-    messages: history,
+    messages: messages,
   });
 
   // 返回模型响应内容，若为空则返回默认提示

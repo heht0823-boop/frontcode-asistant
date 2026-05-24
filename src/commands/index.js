@@ -1,12 +1,20 @@
+/**
+ * 命令处理模块
+ * 提供命令定义、规格文档管理、命令执行等功能
+ */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import ora from "ora";
 import logger from "../utils/logger.js";
 import { askAIModel } from "../request/askAI.js";
 
+/** 项目根目录 */
 const projectRoot = process.cwd();
+
+/** 规格文档路径 */
 const specPath = path.join(projectRoot, "src", "docs", "spec.md");
 
+/** 默认规格文档内容 */
 const defaultSpec = `# FrontCode Assistant Spec
 
 ## 需求文档
@@ -33,6 +41,7 @@ const defaultSpec = `# FrontCode Assistant Spec
 - 暂无。
 `;
 
+/** 命令映射表 */
 export const commands = new Map([
   ["/help", "查看可用命令"],
   ["/spec", "按规范文档规划并执行需求"],
@@ -41,6 +50,9 @@ export const commands = new Map([
   ["/exit", "退出终端对话"],
 ]);
 
+/**
+ * 渲染帮助信息
+ */
 export function renderHelp() {
   console.log("");
   logger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "cyan");
@@ -61,6 +73,10 @@ export function renderHelp() {
   console.log("");
 }
 
+/**
+ * 确保规格文档存在，不存在则创建默认文档
+ * @returns {Promise<string>} 规格文档内容
+ */
 export async function ensureSpecFile() {
   await mkdir(path.dirname(specPath), { recursive: true });
 
@@ -72,10 +88,20 @@ export async function ensureSpecFile() {
   }
 }
 
+/**
+ * 从消息中提取规格需求（移除 /spec 前缀）
+ * @param {string} message - 用户消息
+ * @returns {string} 提取的需求文本
+ */
 export function extractSpecRequest(message) {
   return message.replace(/^\/spec\s*/u, "").trim();
 }
 
+/**
+ * 构建文件上下文字符串
+ * @param {Array<Object>} files - 文件对象数组
+ * @returns {string} 格式化的文件上下文
+ */
 export function buildFileContext(files) {
   if (files.length === 0) {
     return "";
@@ -88,6 +114,12 @@ export function buildFileContext(files) {
     .join("\n\n");
 }
 
+/**
+ * 构建用户消息（包含文件上下文）
+ * @param {string} message - 用户消息
+ * @param {Array<Object>} attachedFiles - 附件文件数组
+ * @returns {string} 完整的用户消息
+ */
 export function buildUserMessage(message, attachedFiles) {
   const fileContext = buildFileContext(attachedFiles);
   if (!fileContext) {
@@ -103,12 +135,25 @@ export function buildUserMessage(message, attachedFiles) {
   ].join("\n");
 }
 
+/**
+ * 解析带标签的文本内容
+ * @param {string} text - 原始文本
+ * @param {string} tag - 标签名称
+ * @returns {string} 标签内的内容
+ */
 function parseTaggedSection(text, tag) {
   const pattern = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "u");
   const match = text.match(pattern);
   return match ? match[1].trim() : "";
 }
 
+/**
+ * 更新规格文档并生成执行规划
+ * @param {string} requirement - 用户需求
+ * @param {string} spec - 当前规格文档
+ * @param {Array<Object>} attachedFiles - 附件文件
+ * @returns {Promise<{raw: string, spec: string, plan: string, issues: string}>}
+ */
 export async function updateSpecAndPlan(requirement, spec, attachedFiles) {
   const fileContext = buildFileContext(attachedFiles);
   const messages = [
@@ -143,6 +188,13 @@ export async function updateSpecAndPlan(requirement, spec, attachedFiles) {
   };
 }
 
+/**
+ * 验证执行规划
+ * @param {string} requirement - 用户需求
+ * @param {string} spec - 规格文档
+ * @param {string} plan - 待审查的规划
+ * @returns {Promise<{raw: string, status: string, spec: string, feedback: string}>}
+ */
 export async function validatePlan(requirement, spec, plan) {
   const messages = [
     {
@@ -178,6 +230,14 @@ export async function validatePlan(requirement, spec, plan) {
   };
 }
 
+/**
+ * 执行规格规划
+ * @param {string} requirement - 用户需求
+ * @param {string} spec - 规格文档
+ * @param {string} plan - 执行规划
+ * @param {Array<Object>} attachedFiles - 附件文件
+ * @returns {Promise<string>} 执行结果
+ */
 export async function executeSpecPlan(requirement, spec, plan, attachedFiles) {
   const fileContext = buildFileContext(attachedFiles);
   const messages = [
@@ -208,6 +268,12 @@ export async function executeSpecPlan(requirement, spec, plan, attachedFiles) {
   return askAIModel(messages);
 }
 
+/**
+ * 处理规格文档流程（更新 -> 验证 -> 执行）
+ * @param {string} requirement - 用户需求
+ * @param {Array<Object>} attachedFiles - 附件文件
+ * @returns {Promise<string>} 执行结果或错误信息
+ */
 export async function handleSpecFlow(requirement, attachedFiles) {
   const spec = await ensureSpecFile();
   const planning = await updateSpecAndPlan(requirement, spec, attachedFiles);
@@ -215,6 +281,7 @@ export async function handleSpecFlow(requirement, attachedFiles) {
 
   await writeFile(specPath, updatedSpec, "utf8");
 
+  // 检查规划阶段是否有问题
   if (planning.issues && planning.issues !== "无") {
     return [
       "规划阶段发现问题，已先改造规格文档，暂不执行。",
@@ -225,6 +292,7 @@ export async function handleSpecFlow(requirement, attachedFiles) {
     ].join("\n");
   }
 
+  // 验证规划
   const review = await validatePlan(
     requirement,
     updatedSpec,
@@ -243,6 +311,7 @@ export async function handleSpecFlow(requirement, attachedFiles) {
     ].join("\n");
   }
 
+  // 执行规划
   return executeSpecPlan(
     requirement,
     updatedSpec,
@@ -251,6 +320,17 @@ export async function handleSpecFlow(requirement, attachedFiles) {
   );
 }
 
+/**
+ * 统一命令处理器
+ * @param {string} command - 命令
+ * @param {string} message - 原始消息
+ * @param {Array<Object>} history - 对话历史
+ * @param {Array<Object>} attachedFiles - 附件文件
+ * @param {Function} saveHistory - 保存历史函数
+ * @param {Function} selectCommand - 选择命令函数
+ * @param {Function} selectFile - 选择文件函数
+ * @returns {Promise<{exit: boolean}>} 是否退出
+ */
 export async function handleCommand(
   command,
   message,
@@ -260,6 +340,7 @@ export async function handleCommand(
   selectCommand,
   selectFile,
 ) {
+  // 退出命令
   if (command === "/exit") {
     console.log("");
     const saveSpinner = ora({
@@ -280,11 +361,13 @@ export async function handleCommand(
     return { exit: true };
   }
 
+  // 帮助命令
   if (command === "/help") {
     renderHelp();
     return { exit: false };
   }
 
+  // 上下文命令
   if (command === "/context") {
     console.log("");
     logger.log(
@@ -295,6 +378,7 @@ export async function handleCommand(
     return { exit: false };
   }
 
+  // 清空命令
   if (command === "/clear") {
     history.length = 0;
     attachedFiles.length = 0;
@@ -304,6 +388,7 @@ export async function handleCommand(
     return { exit: false };
   }
 
+  // 规格命令处理
   const isSpecCommand = message.startsWith("/spec ");
   const promptText = isSpecCommand ? extractSpecRequest(message) : message;
 
@@ -315,6 +400,7 @@ export async function handleCommand(
     return { exit: false };
   }
 
+  // 发送请求给 AI
   console.log("");
   const spinner = ora({
     text: isSpecCommand ? "正在更新规格文档并审查规划..." : "思考中...",
@@ -353,6 +439,11 @@ export async function handleCommand(
   return { exit: false };
 }
 
+/**
+ * 选择文件附件
+ * @param {string} message - 用户消息
+ * @param {Array<Object>} attachedFiles - 附件文件数组
+ */
 export async function chooseFileAttachment(message, attachedFiles) {
   const file = await selectFile(message, { projectRoot });
   attachedFiles.push(file);
