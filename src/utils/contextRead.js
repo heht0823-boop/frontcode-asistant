@@ -20,14 +20,6 @@ function getProjectRoot() {
 }
 
 /**
- * 获取用户目录下的 .front 目录路径
- * @returns {string} .front 目录的绝对路径
- */
-function getUserFrontDir() {
-  return join(os.homedir(), ".front");
-}
-
-/**
  * 读取系统文档并替换占位符（同步版本）
  *
  * 支持的占位符：
@@ -64,13 +56,13 @@ export function readSystem() {
 /**
  * 读取用户上下文文档
  *
- * 优先读取顺序：
- * 1. 用户目录下的 .front/front.md
- * 2. 项目根目录下的 front.md
+ * 文件映射关系：
+ * - src/.front/front.md → ${userPath} 和 ${userContent}
+ * - 项目根目录下的 front.md → ${projectPath} 和 ${projectContent}
  *
  * 支持的占位符：
- * - ${userPath} - 用户目录下 front.md 的路径
- * - ${userContent} - 用户目录下 front.md 的内容
+ * - ${userPath} - src/.front/front.md 的路径
+ * - ${userContent} - src/.front/front.md 的内容
  * - ${projectPath} - 项目根目录下 front.md 的路径
  * - ${projectContent} - 项目根目录下 front.md 的内容
  *
@@ -78,31 +70,30 @@ export function readSystem() {
  */
 export function getUserContext() {
   const projectRoot = getProjectRoot();
-  const userFrontDir = getUserFrontDir();
 
-  // 用户目录下的 front.md 路径
-  const userFrontPath = join(userFrontDir, "front.md");
-  // 项目根目录下的 front.md 路径
+  // src/.front/front.md 路径（映射到 userPath/userContent）
+  const userFrontPath = join(projectRoot, "src", ".front", "front.md");
+  // 项目根目录下的 front.md 路径（映射到 projectPath/projectContent）
   const projectFrontPath = join(projectRoot, "front.md");
 
-  // 用户目录下的内容
+  // src/.front/front.md 的内容
   let userContent = "";
   if (existsSync(userFrontPath)) {
     try {
       userContent = readFileSync(userFrontPath, "utf-8");
     } catch (error) {
-      console.error(`读取用户目录 front.md 失败: ${error.message}`);
+      console.error(`读取 src/.front/front.md 失败: ${error.message}`);
       userContent = "";
     }
   }
 
-  // 项目目录下的内容
+  // 项目根目录下 front.md 的内容
   let projectContent = "";
   if (existsSync(projectFrontPath)) {
     try {
       projectContent = readFileSync(projectFrontPath, "utf-8");
     } catch (error) {
-      console.error(`读取项目目录 front.md 失败: ${error.message}`);
+      console.error(`读取项目根目录 front.md 失败: ${error.message}`);
       projectContent = "";
     }
   }
@@ -150,9 +141,6 @@ export function getUserContext() {
 if (import.meta.url.startsWith("file:")) {
   const modulePath = fileURLToPath(import.meta.url);
   if (process.argv[1] === modulePath) {
-    console.log("=== 系统文档 ===");
-    console.log(readSystem());
-    console.log("\n=== 用户上下文 ===");
     console.log(getUserContext());
   }
 }
