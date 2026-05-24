@@ -31,6 +31,28 @@ const config = getValidatedConfig();
 const systemPrompt = readSystem();
 const userContext = getUserContext();
 const rules = readRules();
+
+// 对话历史和文件附件（模块级别以便信号处理器访问）
+const history = [];
+const attachedFiles = [];
+
+/**
+ * 优雅退出处理
+ */
+async function gracefulShutdown() {
+  console.log("\n正在保存对话历史...");
+  try {
+    await saveHistory(history);
+    console.log("对话历史已保存。再见！");
+  } catch (error) {
+    console.error("保存对话历史失败:", error.message);
+  }
+  process.exit(0);
+}
+
+// 处理 Ctrl+C 信号
+process.on("SIGINT", gracefulShutdown);
+
 /**
  * 启动聊天主循环
  * @returns {Promise<void>}
@@ -38,10 +60,6 @@ const rules = readRules();
 async function startChat() {
   // 确保规格文档存在
   await ensureSpecFile();
-
-  // 初始化对话历史和文件附件
-  const history = [];
-  const attachedFiles = [];
 
   // 显示欢迎界面
   welcome(config.model);
