@@ -152,9 +152,17 @@ function parseTaggedSection(text, tag) {
  * @param {string} requirement - 用户需求
  * @param {string} spec - 当前规格文档
  * @param {Array<Object>} attachedFiles - 附件文件
+ * @param {string} systemPrompt - 系统提示词
+ * @param {string} userContext - 用户上下文
  * @returns {Promise<{raw: string, spec: string, plan: string, issues: string}>}
  */
-export async function updateSpecAndPlan(requirement, spec, attachedFiles) {
+export async function updateSpecAndPlan(
+  requirement,
+  spec,
+  attachedFiles,
+  systemPrompt,
+  userContext,
+) {
   const fileContext = buildFileContext(attachedFiles);
   const messages = [
     {
@@ -179,7 +187,7 @@ export async function updateSpecAndPlan(requirement, spec, attachedFiles) {
     },
   ];
 
-  const reply = await askAIModel(messages);
+  const reply = await askAIModel(messages, systemPrompt, userContext);
   return {
     raw: reply,
     spec: parseTaggedSection(reply, "spec"),
@@ -193,9 +201,17 @@ export async function updateSpecAndPlan(requirement, spec, attachedFiles) {
  * @param {string} requirement - 用户需求
  * @param {string} spec - 规格文档
  * @param {string} plan - 待审查的规划
+ * @param {string} systemPrompt - 系统提示词
+ * @param {string} userContext - 用户上下文
  * @returns {Promise<{raw: string, status: string, spec: string, feedback: string}>}
  */
-export async function validatePlan(requirement, spec, plan) {
+export async function validatePlan(
+  requirement,
+  spec,
+  plan,
+  systemPrompt,
+  userContext,
+) {
   const messages = [
     {
       role: "system",
@@ -221,7 +237,7 @@ export async function validatePlan(requirement, spec, plan) {
     },
   ];
 
-  const reply = await askAIModel(messages);
+  const reply = await askAIModel(messages, systemPrompt, userContext);
   return {
     raw: reply,
     status: parseTaggedSection(reply, "status").toLowerCase(),
@@ -236,9 +252,18 @@ export async function validatePlan(requirement, spec, plan) {
  * @param {string} spec - 规格文档
  * @param {string} plan - 执行规划
  * @param {Array<Object>} attachedFiles - 附件文件
+ * @param {string} systemPrompt - 系统提示词
+ * @param {string} userContext - 用户上下文
  * @returns {Promise<string>} 执行结果
  */
-export async function executeSpecPlan(requirement, spec, plan, attachedFiles) {
+export async function executeSpecPlan(
+  requirement,
+  spec,
+  plan,
+  attachedFiles,
+  systemPrompt,
+  userContext,
+) {
   const fileContext = buildFileContext(attachedFiles);
   const messages = [
     {
@@ -265,18 +290,31 @@ export async function executeSpecPlan(requirement, spec, plan, attachedFiles) {
     },
   ];
 
-  return askAIModel(messages);
+  return askAIModel(messages, systemPrompt, userContext);
 }
 
 /**
  * 处理规格文档流程（更新 -> 验证 -> 执行）
  * @param {string} requirement - 用户需求
  * @param {Array<Object>} attachedFiles - 附件文件
+ * @param {string} systemPrompt - 系统提示词
+ * @param {string} userContext - 用户上下文
  * @returns {Promise<string>} 执行结果或错误信息
  */
-export async function handleSpecFlow(requirement, attachedFiles) {
+export async function handleSpecFlow(
+  requirement,
+  attachedFiles,
+  systemPrompt,
+  userContext,
+) {
   const spec = await ensureSpecFile();
-  const planning = await updateSpecAndPlan(requirement, spec, attachedFiles);
+  const planning = await updateSpecAndPlan(
+    requirement,
+    spec,
+    attachedFiles,
+    systemPrompt,
+    userContext,
+  );
   const updatedSpec = planning.spec || spec;
 
   await writeFile(specPath, updatedSpec, "utf8");
@@ -297,6 +335,8 @@ export async function handleSpecFlow(requirement, attachedFiles) {
     requirement,
     updatedSpec,
     planning.plan || planning.raw,
+    systemPrompt,
+    userContext,
   );
 
   if (review.status !== "pass") {
@@ -317,6 +357,8 @@ export async function handleSpecFlow(requirement, attachedFiles) {
     updatedSpec,
     planning.plan || planning.raw,
     attachedFiles,
+    systemPrompt,
+    userContext,
   );
 }
 
@@ -329,6 +371,8 @@ export async function handleSpecFlow(requirement, attachedFiles) {
  * @param {Function} saveHistory - 保存历史函数
  * @param {Function} selectCommand - 选择命令函数
  * @param {Function} selectFile - 选择文件函数
+ * @param {string} systemPrompt - 系统提示词
+ * @param {string} userContext - 用户上下文
  * @returns {Promise<{exit: boolean}>} 是否退出
  */
 export async function handleCommand(
@@ -339,6 +383,8 @@ export async function handleCommand(
   saveHistory,
   selectCommand,
   selectFile,
+  systemPrompt,
+  userContext,
 ) {
   // 退出命令
   if (command === "/exit") {
@@ -409,14 +455,18 @@ export async function handleCommand(
 
   try {
     const reply = isSpecCommand
-      ? await handleSpecFlow(promptText, attachedFiles)
-      : await askAIModel([
-          ...history,
-          {
-            role: "user",
-            content: buildUserMessage(promptText, attachedFiles),
-          },
-        ]);
+      ? await handleSpecFlow(promptText, attachedFiles, systemPrompt, userContext)
+      : await askAIModel(
+          [
+            ...history,
+            {
+              role: "user",
+              content: buildUserMessage(promptText, attachedFiles),
+            },
+          ],
+          systemPrompt,
+          userContext,
+        );
 
     history.push({
       role: "user",

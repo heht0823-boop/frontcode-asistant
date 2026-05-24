@@ -16,6 +16,7 @@ import { getValidatedConfig } from "./utils/config.js";
 import { welcome } from "./utils/init.js";
 import { saveHistory } from "./utils/fshandle.js";
 import { selectCommand, selectFile } from "./utils/interactive.js";
+import { readSystem, getUserContext } from "./utils/contextRead.js";
 import {
   commands,
   ensureSpecFile,
@@ -25,6 +26,10 @@ import {
 
 // 验证并加载配置
 const config = getValidatedConfig();
+
+// 启动时一次性读取提示词（避免每次调用都读取文件）
+const systemPrompt = readSystem();
+const userContext = getUserContext();
 
 /**
  * 启动聊天主循环
@@ -76,7 +81,7 @@ async function startChat() {
       command = await selectCommand(message, commands);
     }
 
-    // 执行命令处理
+    // 执行命令处理（传入预加载的提示词）
     const result = await handleCommand(
       command,
       message,
@@ -85,6 +90,8 @@ async function startChat() {
       saveHistory,
       selectCommand,
       selectFile,
+      systemPrompt,
+      userContext,
     );
 
     // 退出标志
