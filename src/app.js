@@ -16,7 +16,7 @@ import { getValidatedConfig } from "./utils/config.js";
 import { welcome } from "./utils/init.js";
 import { saveHistory } from "./utils/fshandle.js";
 import { selectCommand, selectFile } from "./utils/interactive.js";
-import { readSystem, getUserContext } from "./utils/contextRead.js";
+import { readSystem, getUserContext, readRules } from "./utils/contextRead.js";
 import {
   commands,
   ensureSpecFile,
@@ -30,7 +30,7 @@ const config = getValidatedConfig();
 // 启动时一次性读取提示词（避免每次调用都读取文件）
 const systemPrompt = readSystem();
 const userContext = getUserContext();
-
+const rules = readRules();
 /**
  * 启动聊天主循环
  * @returns {Promise<void>}
@@ -67,7 +67,7 @@ async function startChat() {
     // 处理文件选择（@ 符号）
     if (message.includes("@")) {
       try {
-        await chooseFileAttachment(message, attachedFiles);
+        await chooseFileAttachment(message, attachedFiles, rules);
       } catch (error) {
         console.log(`文件选择失败: ${error.message}`);
       }

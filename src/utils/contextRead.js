@@ -7,25 +7,15 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 
-// 获取当前文件的目录路径（ESM 兼容方式）
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/**
- * 获取项目根目录路径
- * @returns {string} 项目根目录的绝对路径
- */
 function getProjectRoot() {
   return join(__dirname, "..", "..");
 }
 
 /**
  * 读取系统文档并替换占位符（同步版本）
- *
- * 支持的占位符：
- * - ${systemInfo} - 操作系统信息
- * - ${workPath} - 当前项目根目录路径
- *
  * @returns {string} 替换后的系统文档内容
  */
 export function readSystem() {
@@ -33,16 +23,10 @@ export function readSystem() {
   const systemDocPath = join(projectRoot, "src", "docs", "systemDoc.md");
 
   try {
-    // 读取系统文档内容（同步方式）
     const content = readFileSync(systemDocPath, "utf-8");
-
-    // 获取系统信息（操作系统类型、版本、平台）
     const systemInfo = `${os.type()} ${os.release()} (${os.platform()})`;
-
-    // 获取工作目录（项目根目录的绝对路径）
     const workPath = projectRoot;
 
-    // 替换占位符（全局替换）
     let result = content.replace(/\${systemInfo}/g, systemInfo);
     result = result.replace(/\${workPath}/g, workPath);
 
@@ -55,28 +39,14 @@ export function readSystem() {
 
 /**
  * 读取用户上下文文档
- *
- * 文件映射关系：
- * - src/.front/front.md → ${userPath} 和 ${userContent}
- * - 项目根目录下的 front.md → ${projectPath} 和 ${projectContent}
- *
- * 支持的占位符：
- * - ${userPath} - src/.front/front.md 的路径
- * - ${userContent} - src/.front/front.md 的内容
- * - ${projectPath} - 项目根目录下 front.md 的路径
- * - ${projectContent} - 项目根目录下 front.md 的内容
- *
  * @returns {string} 替换后的用户上下文内容，若无文件则返回空字符串
  */
 export function getUserContext() {
   const projectRoot = getProjectRoot();
 
-  // src/.front/front.md 路径（映射到 userPath/userContent）
   const userFrontPath = join(projectRoot, "src", ".front", "front.md");
-  // 项目根目录下的 front.md 路径（映射到 projectPath/projectContent）
   const projectFrontPath = join(projectRoot, "front.md");
 
-  // src/.front/front.md 的内容
   let userContent = "";
   if (existsSync(userFrontPath)) {
     try {
@@ -87,7 +57,6 @@ export function getUserContext() {
     }
   }
 
-  // 项目根目录下 front.md 的内容
   let projectContent = "";
   if (existsSync(projectFrontPath)) {
     try {
@@ -98,12 +67,10 @@ export function getUserContext() {
     }
   }
 
-  // 如果两个文件都不存在，返回空字符串
   if (!userContent && !projectContent) {
     return "";
   }
 
-  // 读取用户上下文模板
   const userContextTemplatePath = join(
     projectRoot,
     "src",
@@ -116,19 +83,16 @@ export function getUserContext() {
     template = readFileSync(userContextTemplatePath, "utf-8");
   } catch (error) {
     console.error(`读取用户上下文模板失败: ${error.message}`);
-    // 如果模板文件不存在，使用默认格式
     template =
       "用户额外有以下要求，当你回答问题的时候，请参考\n[${userPath}]${userContent}\n[${projectPath}]${projectContent}";
   }
 
-  // 替换占位符
   let result = template
     .replace(/\${userPath}/g, userContent ? userFrontPath : "")
     .replace(/\${userContent}/g, userContent)
     .replace(/\${projectPath}/g, projectContent ? projectFrontPath : "")
     .replace(/\${projectContent}/g, projectContent);
 
-  // 清理空行
   result = result
     .split("\n")
     .filter((line) => line.trim() !== "")
@@ -140,30 +104,24 @@ export function getUserContext() {
 /**
  * 从规则文件内容中解析 YAML frontmatter 中的触发规则
  * @param {string} content - 规则文件内容
- * @returns {Array<string>} 触发规则数组（paths 字段的值）
+ * @returns {Array<string>} 触发规则数组
  */
 function parseRulesFromContent(content) {
   const rules = [];
 
-  // 匹配 YAML frontmatter（--- 包围的部分）
   const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/;
   const match = content.match(frontmatterRegex);
 
   if (match && match[1]) {
     const frontmatter = match[1];
-
-    // 解析 paths 字段
     const pathsRegex = /paths:\s*\n((?:\s*-\s*.+\n?)+)/;
     const pathsMatch = frontmatter.match(pathsRegex);
 
     if (pathsMatch && pathsMatch[1]) {
-      // 提取每个路径项
       const pathItems = pathsMatch[1].match(/-\s*(.+)/g);
       if (pathItems) {
         for (const item of pathItems) {
-          // 移除 "- " 前缀和引号
           let path = item.replace(/-\s*/, "").trim();
-          // 移除开头和结尾的引号
           path = path.replace(/^["']|["']$/g, "");
           if (path) {
             rules.push(path);
@@ -179,7 +137,7 @@ function parseRulesFromContent(content) {
 /**
  * 读取目录下所有文件并添加到 Map 中
  * @param {string} dirPath - 目录路径
- * @param {Map<string, Object>} rulesMap - 规则缓存 Map
+ * @param {Map} rulesMap - 规则缓存 Map
  */
 function readRulesFromDir(dirPath, rulesMap) {
   if (!existsSync(dirPath)) {
@@ -192,7 +150,6 @@ function readRulesFromDir(dirPath, rulesMap) {
       const filePath = join(dirPath, file);
       try {
         const stat = statSync(filePath);
-        // 只处理文件，跳过目录
         if (stat.isFile()) {
           const content = readFileSync(filePath, "utf-8");
           const rules = parseRulesFromContent(content);
@@ -212,34 +169,73 @@ function readRulesFromDir(dirPath, rulesMap) {
 
 /**
  * 读取规则文件
- *
- * 读取以下目录下的所有规则文件：
- * - src/.front/rules/ 目录下的所有文件
- * - 项目根目录/front/rules/ 目录下的所有文件
- *
- * @returns {Map<string, {content: string, rules: Array<string>}>} 规则缓存 Map
- * - 键名：文件路径
- * - 值：{ content: 规则内容, rules: 触发规则数组（从 YAML frontmatter 的 paths 字段提取） }
+ * @returns {Map} 规则缓存 Map
  */
 export function readRules() {
   const projectRoot = getProjectRoot();
   const rulesMap = new Map();
 
-  // src/.front/rules/ 目录路径
   const srcRulesPath = join(projectRoot, "src", ".front", "rules");
-  // 项目根目录/front/rules/ 目录路径
   const projectRulesPath = join(projectRoot, "front", "rules");
 
-  // 读取 src/.front/rules/ 目录
   readRulesFromDir(srcRulesPath, rulesMap);
-
-  // 读取项目根目录/front/rules/ 目录
   readRulesFromDir(projectRulesPath, rulesMap);
 
   return rulesMap;
 }
 
-// 测试代码（仅在直接运行当前文件时执行）
+/**
+ * 将 glob 模式转换为正则表达式
+ * @param {string} pattern - glob 模式
+ * @returns {RegExp} 正则表达式
+ */
+function globToRegex(pattern) {
+  let regexStr = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*/g, "{{DOUBLESTAR}}")
+    .replace(/\*/g, "[^/]*")
+    .replace(/\{\{DOUBLESTAR\}\}/g, ".*")
+    .replace(/\?/g, ".");
+
+  return new RegExp("^" + regexStr + "$");
+}
+
+/**
+ * 匹配文件路径与规则
+ * @param {string} filePath - 文件路径
+ * @param {Array<string>} rules - glob 规则数组
+ * @returns {boolean} 是否匹配
+ */
+function matchPathAgainstRules(filePath, rules) {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+
+  for (const rule of rules) {
+    const regex = globToRegex(rule);
+    if (regex.test(normalizedPath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 根据文件路径匹配规则，返回匹配到的规则内容
+ * @param {string} filePath - 文件绝对路径
+ * @param {Map} rulesMap - 规则缓存 Map
+ * @returns {string} 匹配到的规则内容，如果没有匹配则返回空字符串
+ */
+export function matchRulesForFile(filePath, rulesMap) {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+
+  for (const [rulePath, ruleData] of rulesMap) {
+    if (matchPathAgainstRules(normalizedPath, ruleData.rules)) {
+      return ruleData.content;
+    }
+  }
+  return "";
+}
+
+// 测试代码
 if (import.meta.url.startsWith("file:")) {
   const modulePath = fileURLToPath(import.meta.url);
   if (process.argv[1] === modulePath) {
@@ -256,5 +252,10 @@ if (import.meta.url.startsWith("file:")) {
         console.log(`内容长度: ${data.content.length} 字符`);
       }
     }
+    console.log("\n=== 规则匹配测试 ===");
+    const testPath = "C:\\Users\\test\\project\\src\\style\\main.css";
+    const matchedContent = matchRulesForFile(testPath, rules);
+    console.log(`测试路径: ${testPath}`);
+    console.log(`匹配结果: ${matchedContent ? "命中" : "未命中"}`);
   }
 }

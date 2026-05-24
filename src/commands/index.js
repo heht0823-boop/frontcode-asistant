@@ -7,6 +7,7 @@ import path from "node:path";
 import ora from "ora";
 import logger from "../utils/logger.js";
 import { askAIModel } from "../request/askAI.js";
+import { matchRulesForFile } from "../utils/contextRead.js";
 
 /** 项目根目录 */
 const projectRoot = process.cwd();
@@ -108,9 +109,24 @@ export function buildFileContext(files) {
   }
 
   return files
-    .map((file) =>
-      [`文件: ${file.path}`, "```", file.content, "```"].join("\n"),
-    )
+    .map((file) => {
+      let context = [`文件: ${file.path}`];
+
+      // 如果文件有匹配的规则内容，添加规则上下文
+      if (file.rulesContent) {
+        context.push("【匹配的规则】");
+        context.push("```");
+        context.push(file.rulesContent);
+        context.push("```");
+      }
+
+      context.push("【文件内容】");
+      context.push("```");
+      context.push(file.content);
+      context.push("```");
+
+      return context.join("\n");
+    })
     .join("\n\n");
 }
 
@@ -455,7 +471,12 @@ export async function handleCommand(
 
   try {
     const reply = isSpecCommand
-      ? await handleSpecFlow(promptText, attachedFiles, systemPrompt, userContext)
+      ? await handleSpecFlow(
+          promptText,
+          attachedFiles,
+          systemPrompt,
+          userContext,
+        )
       : await askAIModel(
           [
             ...history,
@@ -493,9 +514,20 @@ export async function handleCommand(
  * 选择文件附件
  * @param {string} message - 用户消息
  * @param {Array<Object>} attachedFiles - 附件文件数组
+ * @param {Map<string, Object>} [rules] - 规则缓存 Map（可选）
  */
-export async function chooseFileAttachment(message, attachedFiles) {
+export async function chooseFileAttachment(message, attachedFiles, rules) {
   const file = await selectFile(message, { projectRoot });
+
+  // 如果传入了 rules 参数，进行规则匹配
+  if (rules && rules.size > 0) {
+    const rulesContent = matchRulesForFile(file.absolutePath, rules);
+    if (rulesContent) {
+      file.rulesContent = rulesContent;
+      logger.log(`已匹配规则: ${file.path}`, "cyan");
+    }
+  }
+
   attachedFiles.push(file);
   logger.log(`已选择文件: ${file.path}`, "green");
   logger.log(
