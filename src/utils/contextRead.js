@@ -392,7 +392,10 @@ export function getSkillsContext() {
   }
 
   const formattedSkills = skills
-    .map((skill) => `- **${skill.name}**: ${skill.description}`)
+    .map((skill) => {
+      const skillFilePath = join(skill.dirPath, "SKILL.md");
+      return `- **${skill.name}**: ${skill.description}\n  地址: ${skillFilePath}`;
+    })
     .join("\n");
 
   return `技能列表:\n${formattedSkills}`;
