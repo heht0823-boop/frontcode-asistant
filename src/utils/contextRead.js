@@ -234,28 +234,3 @@ export function matchRulesForFile(filePath, rulesMap) {
   }
   return "";
 }
-
-// 测试代码
-if (import.meta.url.startsWith("file:")) {
-  const modulePath = fileURLToPath(import.meta.url);
-  if (process.argv[1] === modulePath) {
-    console.log("=== 用户上下文 ===");
-    console.log(getUserContext());
-    console.log("\n=== 规则文件 ===");
-    const rules = readRules();
-    if (rules.size === 0) {
-      console.log("无规则文件");
-    } else {
-      for (const [path, data] of rules) {
-        console.log(`\n文件: ${path}`);
-        console.log(`触发规则: ${JSON.stringify(data.rules)}`);
-        console.log(`内容长度: ${data.content.length} 字符`);
-      }
-    }
-    console.log("\n=== 规则匹配测试 ===");
-    const testPath = "C:\\Users\\test\\project\\src\\style\\main.css";
-    const matchedContent = matchRulesForFile(testPath, rules);
-    console.log(`测试路径: ${testPath}`);
-    console.log(`匹配结果: ${matchedContent ? "命中" : "未命中"}`);
-  }
-}

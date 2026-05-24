@@ -8,6 +8,7 @@ import ora from "ora";
 import logger from "../utils/logger.js";
 import { askAIModel } from "../request/askAI.js";
 import { matchRulesForFile } from "../utils/contextRead.js";
+import { selectFile } from "../utils/interactive.js";
 
 /** 项目根目录 */
 const projectRoot = process.cwd();
