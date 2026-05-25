@@ -9,6 +9,7 @@ import logger from "../utils/logger.js";
 import { askAIModel } from "../request/askAI.js";
 import { matchRulesForFile } from "../utils/contextRead.js";
 import { selectFile } from "../utils/interactive.js";
+import { storeAllFilesIn } from "../utils/ragHandle.js";
 
 /** 项目根目录 */
 const projectRoot = process.cwd();
@@ -47,6 +48,7 @@ const defaultSpec = `# FrontCode Assistant Spec
 export const commands = new Map([
   ["/help", "查看可用命令"],
   ["/spec", "按规范文档规划并执行需求"],
+  ["/vector", "将本地文档转为向量存储"],
   ["/context", "查看当前对话和附件状态"],
   ["/clear", "清空当前对话上下文和文件附件"],
   ["/exit", "退出终端对话"],
@@ -427,6 +429,27 @@ export async function handleCommand(
   // 帮助命令
   if (command === "/help") {
     renderHelp();
+    return { exit: false };
+  }
+
+  // 向量化命令
+  if (command === "/vector") {
+    console.log("");
+    const vectorSpinner = ora({
+      text: "正在将本地文档转为向量存储...",
+      color: "cyan",
+    }).start();
+
+    try {
+      await storeAllFilesIn();
+      vectorSpinner.succeed();
+      logger.log("本地文档已成功转为向量存储。", "green");
+    } catch (error) {
+      vectorSpinner.fail();
+      logger.log(`向量化失败: ${error.message}`, "red");
+    }
+
+    console.log("");
     return { exit: false };
   }
 
