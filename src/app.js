@@ -11,7 +11,6 @@
  */
 import inquirer from "inquirer";
 import "dotenv/config";
-
 import { getValidatedConfig } from "./utils/config.js";
 import { welcome } from "./utils/init.js";
 import { saveHistory } from "./utils/fshandle.js";
