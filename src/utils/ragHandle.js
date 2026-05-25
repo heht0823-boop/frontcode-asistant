@@ -74,9 +74,9 @@ export async function getAllRagFile() {
   //获取user目录和当前工作目录
   const userHomeDir = getUserHomeDir();
   const currentWorkingDir = getCurrentWorkingDir();
-  //获取user目录和当前工作目录下的.front下的doc，这里放着所有本地文档
+  //获取user目录下的.front/doc，以及当前工作目录下的src/.front/doc
   const userDocDir = path.join(userHomeDir, ".front", "doc");
-  const currentDirDocDir = path.join(currentWorkingDir, ".front", "doc");
+  const currentDirDocDir = path.join(currentWorkingDir, "src", ".front", "doc");
   //分别获取到user下的所有文件，以及当前目录下的所有文件
   const userFiles = getFilesFromDir(userDocDir);
   const currentDirFiles = getFilesFromDir(currentDirDocDir);
@@ -90,7 +90,6 @@ export async function getAllRagFile() {
   //currentDirDocArr-为读取到的当前目录下的所有文档
   return { userDocArr, currentDirDocArr };
 }
-fs.writeFileSync("./files.json", JSON.stringify(await getAllRagFile()));
 
 /**
  * 将文件内容数组转为向量
@@ -138,13 +137,18 @@ export async function filesToEmbedding(fileArr) {
 export async function storeIn(type, vectors) {
   if (!Array.isArray(vectors) || vectors.length === 0) return;
   //根据是user目录下的文档，还是当前项目下的文档，连接到不同位置
-  //核心就是当前项目下的存到当前项目下的.front下的langce-db文件夹
   //user下的存到user下的.front下的langce-db文件夹
+  //current下的存到src/.front下的langce-db文件夹
   let dbPath;
   if (type === "user") {
     dbPath = path.join(getUserHomeDir(), ".front", "langcedb-data");
   } else if (type === "current") {
-    dbPath = path.join(getCurrentWorkingDir(), ".front", "langcedb-data");
+    dbPath = path.join(
+      getCurrentWorkingDir(),
+      "src",
+      ".front",
+      "langcedb-data",
+    );
   } else {
     throw new Error('type must be "user" or "current"');
   }
@@ -176,7 +180,7 @@ export async function searchFileAndStoreIn(fileName) {
   const userHomeDir = getUserHomeDir();
   const currentWorkingDir = getCurrentWorkingDir();
   const userDocDir = path.join(userHomeDir, ".front", "doc");
-  const currentDocDir = path.join(currentWorkingDir, ".front", "doc");
+  const currentDocDir = path.join(currentWorkingDir, "src", ".front", "doc");
 
   const targets = [];
 
@@ -244,6 +248,7 @@ export async function searchLocalVector(queryText) {
   const userDbPath = path.join(getUserHomeDir(), ".front", "langcedb-data");
   const currentDbPath = path.join(
     getCurrentWorkingDir(),
+    "src",
     ".front",
     "langcedb-data",
   );
@@ -253,25 +258,31 @@ export async function searchLocalVector(queryText) {
 
   // 搜索 user 目录下的 lancedb
   if (fs.existsSync(userDbPath)) {
-    const db = await lancedb.connect(userDbPath);
-    const tableNames = await db.tableNames();
-    if (tableNames.includes("doc-table")) {
-      const table = await db.openTable("doc-table");
-      userResults = await table.search(vector).limit(3).toArray();
+    try {
+      const db = await lancedb.connect(userDbPath);
+      const tableNames = await db.tableNames();
+      if (tableNames.includes("doc-table")) {
+        const table = await db.openTable("doc-table");
+        userResults = await table.search(vector).limit(3).toArray();
+      }
+    } catch (error) {
+      console.error(`搜索 user 向量库失败: ${error.message}`);
     }
   }
 
   // 搜索当前项目目录下的 lancedb
   if (fs.existsSync(currentDbPath)) {
-    const db = await lancedb.connect(currentDbPath);
-    const tableNames = await db.tableNames();
-    if (tableNames.includes("doc-table")) {
-      const table = await db.openTable("doc-table");
-      currentResults = await table.search(vector).limit(3).toArray();
+    try {
+      const db = await lancedb.connect(currentDbPath);
+      const tableNames = await db.tableNames();
+      if (tableNames.includes("doc-table")) {
+        const table = await db.openTable("doc-table");
+        currentResults = await table.search(vector).limit(3).toArray();
+      }
+    } catch (error) {
+      console.error(`搜索当前项目向量库失败: ${error.message}`);
     }
   }
 
   return [...userResults, ...currentResults].map((r) => r.text);
 }
-
-console.log(await searchLocalVector("病假"));
