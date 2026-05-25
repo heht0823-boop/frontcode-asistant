@@ -11,7 +11,7 @@
  */
 import inquirer from "inquirer";
 import "dotenv/config";
-import { getValidatedConfig } from "./utils/config.js";
+import { loadValidatedConfig } from "./utils/config.js";
 import { welcome } from "./utils/init.js";
 import { saveHistory } from "./utils/fshandle.js";
 import { selectCommand, selectFile } from "./utils/interactive.js";
@@ -22,9 +22,6 @@ import {
   handleCommand,
   chooseFileAttachment,
 } from "./commands/index.js";
-
-// 验证并加载配置
-const config = getValidatedConfig();
 
 // 启动时一次性读取提示词（避免每次调用都读取文件）
 const systemPrompt = readSystem();
@@ -57,6 +54,9 @@ process.on("SIGINT", gracefulShutdown);
  * @returns {Promise<void>}
  */
 async function startChat() {
+  // 验证并加载配置，支持 settings.json 和 .env 两种来源
+  const config = await loadValidatedConfig();
+
   // 确保规格文档存在
   await ensureSpecFile();
 

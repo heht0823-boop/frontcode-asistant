@@ -3,8 +3,24 @@
  */
 import OpenAI from "openai";
 import { loadConfig } from "../utils/config.js";
-import { getLocalTool } from "../tools/local/index.js";
+import { executeTool, getToolRegistry } from "../tools/index.js";
 import { transformToOpenAi } from "../tools/util.js";
+
+/** 单次请求最多允许连续工具调用的轮数，避免模型陷入循环。 */
+const maxToolRounds = 5;
+
+/**
+ * 解析工具调用参数。
+ * @param {string} rawArguments - OpenAI 返回的参数字符串
+ * @returns {Object} 工具参数对象
+ */
+function parseToolArguments(rawArguments) {
+  if (!rawArguments) {
+    return {};
+  }
+
+  return JSON.parse(rawArguments);
+}
 
 /**
  * 调用 OpenAI 模型进行对话（支持工具调用）
@@ -12,6 +28,7 @@ import { transformToOpenAi } from "../tools/util.js";
  * @param {string} systemPrompt - 系统提示词（从外部传入，避免每次调用都读取）
  * @param {string} [userContext=""] - 用户上下文提示词（可选）
  * @param {Array<Object>} [tools=[]] - 可用工具列表（可选）
+ * @param {number} [toolRound=0] - 当前工具调用轮数
  * @returns {Promise<string>} 模型返回的响应文本
  */
 export async function askAIModel(
@@ -19,6 +36,7 @@ export async function askAIModel(
   systemPrompt,
   userContext = "",
   tools = [],
+  toolRound = 0,
 ) {
   // 加载配置
   const config = await loadConfig();
@@ -29,11 +47,14 @@ export async function askAIModel(
     baseURL: config.baseURL,
   });
 
-  // 获取本地工具
-  const { localTools } = getLocalTool();
+  // 获取统一工具注册表（本地工具 + MCP 工具）
+  const registry = await getToolRegistry();
+  if (registry.errors.length > 0) {
+    registry.errors.forEach((error) => console.warn(error));
+  }
 
   // 合并外部工具和本地工具，并转换为 OpenAI 格式
-  const allTools = [...tools, ...transformToOpenAi(localTools)];
+  const allTools = [...tools, ...transformToOpenAi(registry.tools)];
 
   // 构建消息列表：系统提示词 + 用户上下文 + 对话历史
   const messages = [];
@@ -69,12 +90,17 @@ export async function askAIModel(
 
   // 如果模型决定调用工具
   if (message.tool_calls && message.tool_calls.length > 0) {
+    if (toolRound >= maxToolRounds) {
+      return "工具调用轮数过多，已停止继续调用工具。";
+    }
+
     return await handleToolCalls(
       message,
       history,
       systemPrompt,
       userContext,
       tools,
+      toolRound,
     );
   }
 
@@ -89,6 +115,7 @@ export async function askAIModel(
  * @param {string} systemPrompt - 系统提示词
  * @param {string} userContext - 用户上下文
  * @param {Array<Object>} tools - 工具列表
+ * @param {number} toolRound - 当前工具调用轮数
  * @returns {Promise<string>} 最终响应
  */
 async function handleToolCalls(
@@ -97,32 +124,23 @@ async function handleToolCalls(
   systemPrompt,
   userContext,
   tools,
+  toolRound,
 ) {
-  const { localTools, localMap } = getLocalTool();
+  // OpenAI 要求先追加一次包含完整 tool_calls 的 assistant 消息。
+  history.push({
+    role: "assistant",
+    content: message.content || null,
+    tool_calls: message.tool_calls,
+  });
 
   // 执行所有工具调用
   for (const toolCall of message.tool_calls) {
     const toolName = toolCall.function.name;
-    const args = JSON.parse(toolCall.function.arguments);
-
-    // 查找工具客户端
-    const client = localMap[toolName];
-
-    if (!client) {
-      console.error(`未找到工具: ${toolName}`);
-      continue;
-    }
 
     // 调用工具
     try {
-      const result = await client.callTool({ name: toolName, arguments: args });
-
-      // 将工具调用结果添加到对话历史
-      history.push({
-        role: "assistant",
-        content: null,
-        tool_calls: [toolCall],
-      });
+      const args = parseToolArguments(toolCall.function.arguments);
+      const result = await executeTool(toolName, args);
 
       history.push({
         role: "tool",
@@ -131,13 +149,6 @@ async function handleToolCalls(
       });
     } catch (error) {
       console.error(`工具调用失败 ${toolName}: ${error.message}`);
-
-      // 添加错误信息到对话历史
-      history.push({
-        role: "assistant",
-        content: null,
-        tool_calls: [toolCall],
-      });
 
       history.push({
         role: "tool",
@@ -151,5 +162,11 @@ async function handleToolCalls(
   }
 
   // 递归调用 askAIModel，让模型总结工具调用结果
-  return await askAIModel(history, systemPrompt, userContext, tools);
+  return await askAIModel(
+    history,
+    systemPrompt,
+    userContext,
+    tools,
+    toolRound + 1,
+  );
 }

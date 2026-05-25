@@ -63,18 +63,44 @@ export function hasApiKey() {
 }
 
 /**
- * 获取验证后的配置（确保敏感信息不为空）
- * @returns {Object} 验证后的配置对象
+ * 判断配置对象中是否包含有效 API Key。
+ * @param {Object} config - 待检查的配置对象
+ * @returns {boolean} 是否存在有效 API Key
+ */
+export function hasValidApiKey(config) {
+  const apiKey = config?.apiKey;
+  return !!apiKey && apiKey.trim() !== "" && apiKey !== "your-api-key-here";
+}
+
+/**
+ * 校验配置对象。
+ * @param {Object} config - 待校验的配置对象
+ * @returns {Object} 通过校验的配置对象
  * @throws {Error} 当必需配置缺失时抛出错误
  */
-export function getValidatedConfig() {
-  const config = getConfigSync();
-
-  if (!hasApiKey()) {
+export function validateConfig(config) {
+  if (!hasValidApiKey(config)) {
     throw new Error(
       "缺少有效的 OPENAI_API_KEY 配置。请在 .env 文件或 settings.json 中配置有效的 API Key。",
     );
   }
 
   return config;
+}
+
+/**
+ * 异步加载并校验完整配置。
+ * @returns {Promise<Object>} 验证后的配置对象
+ */
+export async function loadValidatedConfig() {
+  return validateConfig(await loadConfig());
+}
+
+/**
+ * 获取验证后的配置（确保敏感信息不为空）
+ * @returns {Object} 验证后的配置对象
+ * @throws {Error} 当必需配置缺失时抛出错误
+ */
+export function getValidatedConfig() {
+  return validateConfig(getConfigSync());
 }
