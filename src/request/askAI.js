@@ -1,10 +1,10 @@
 /**
  * OpenAI API 请求模块
  */
-import OpenAI from "openai";
 import { loadConfig } from "../utils/config.js";
 import { executeTool, getToolRegistry } from "../tools/index.js";
 import { transformToOpenAi } from "../tools/util.js";
+import { createOpenAIClient } from "./index.js";
 
 /** 单次请求最多允许连续工具调用的轮数，避免模型陷入循环。 */
 const maxToolRounds = 5;
@@ -38,14 +38,8 @@ export async function askAIModel(
   tools = [],
   toolRound = 0,
 ) {
-  // 加载配置
-  const config = await loadConfig();
-
-  // 创建 OpenAI 客户端实例
-  const openai = new OpenAI({
-    apiKey: config.apiKey,
-    baseURL: config.baseURL,
-  });
+  // 使用统一的 OpenAI 客户端创建函数
+  const openai = await createOpenAIClient();
 
   // 获取统一工具注册表（本地工具 + MCP 工具）
   const registry = await getToolRegistry();
@@ -77,6 +71,9 @@ export async function askAIModel(
 
   // 添加对话历史
   messages.push(...history);
+
+  // 获取配置用于模型参数
+  const config = await loadConfig();
 
   // 调用 chat.completions.create 接口发送请求
   const response = await openai.chat.completions.create({
