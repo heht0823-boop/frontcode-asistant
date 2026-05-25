@@ -9,7 +9,11 @@ import logger from "../utils/logger.js";
 import { askAIModel } from "../request/askAI.js";
 import { matchRulesForFile } from "../utils/contextRead.js";
 import { selectFile } from "../utils/interactive.js";
-import { storeAllFilesIn, searchFileAndStoreIn } from "../utils/ragHandle.js";
+import {
+  storeAllFilesIn,
+  searchFileAndStoreIn,
+  searchLocalVector,
+} from "../utils/ragHandle.js";
 
 /** 项目根目录 */
 const projectRoot = process.cwd();
@@ -516,6 +520,22 @@ export async function handleCommand(
   }).start();
 
   try {
+    // 向量检索：查找相关文档作为上下文（不存储到历史）
+    let vectorContext = "";
+    if (!isSpecCommand) {
+      const vectorResults = await searchLocalVector(promptText);
+      if (vectorResults && vectorResults.length > 0) {
+        vectorContext = "【检索到的相关文档】\n" + vectorResults.join("\n\n");
+      }
+    }
+
+    // 合并用户上下文和向量检索结果
+    const combinedContext = userContext
+      ? vectorContext
+        ? `${userContext}\n\n${vectorContext}`
+        : userContext
+      : vectorContext;
+
     const reply = isSpecCommand
       ? await handleSpecFlow(
           promptText,
@@ -532,7 +552,7 @@ export async function handleCommand(
             },
           ],
           systemPrompt,
-          userContext,
+          combinedContext,
         );
 
     history.push({
