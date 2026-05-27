@@ -6,6 +6,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
+import { getNowMemory } from "./memoryUtils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -108,11 +109,16 @@ export function getUserContext() {
       "用户额外有以下要求，当你回答问题的时候，请参考\n[${userPath}]${userContent}\n[${projectPath}]${projectContent}";
   }
 
+  // 获取记忆内容
+  const { projectMemory, userMemory } = getNowMemory();
+
   let result = template
     .replace(/\${userPath}/g, userContent ? userFrontPath : "")
     .replace(/\${userContent}/g, userContent)
     .replace(/\${projectPath}/g, projectContent ? projectFrontPath : "")
-    .replace(/\${projectContent}/g, projectContent);
+    .replace(/\${projectContent}/g, projectContent)
+    .replace(/\${projectMemory}/g, projectMemory || "无")
+    .replace(/\${userMemory}/g, userMemory || "无");
 
   result = result
     .split("\n")
@@ -392,10 +398,10 @@ export function getSkillsContext() {
   }
 
   const formattedSkills = skills
-    .map((skill) => {
-      const skillFilePath = join(skill.dirPath, "SKILL.md");
-      return `- **${skill.name}**: ${skill.description}\n  地址: ${skillFilePath}`;
-    })
+    .map(
+      (skill) =>
+        `- **${skill.name}**: ${skill.description}\n  地址: ${skill.dirPath}\SKILL.md`,
+    )
     .join("\n");
 
   return `技能列表:\n${formattedSkills}`;

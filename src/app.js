@@ -70,7 +70,7 @@ async function startChat() {
       {
         type: "input",
         name: "line",
-        message: "你 >",
+        message: "请输入你的需求 >",
       },
     ]);
 

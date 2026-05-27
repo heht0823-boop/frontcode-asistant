@@ -14,6 +14,7 @@ import {
   searchFileAndStoreIn,
   searchLocalVector,
 } from "../utils/ragHandle.js";
+import { getMemoryContent } from "../utils/memoryUtils.js";
 
 /** 项目根目录 */
 const projectRoot = process.cwd();
@@ -53,6 +54,7 @@ export const commands = new Map([
   ["/help", "查看可用命令"],
   ["/spec", "按规范文档规划并执行需求"],
   ["/vector", "将本地文档转为向量存储（支持 /vector 文件名）"],
+  ["/memory", "生成并保存用户/项目记忆"],
   ["/context", "查看当前对话和附件状态"],
   ["/clear", "清空当前对话上下文和文件附件"],
   ["/exit", "退出终端对话"],
@@ -473,6 +475,44 @@ export async function handleCommand(
         vectorSpinner.fail();
         logger.log(`向量化失败: ${error.message}`, "red");
       }
+    }
+
+    console.log("");
+    return { exit: false };
+  }
+
+  // 记忆命令
+  if (command === "/memory") {
+    console.log("");
+    const memorySpinner = ora({
+      text: "正在生成记忆...",
+      color: "cyan",
+    }).start();
+
+    try {
+      // 获取记忆内容
+      const memoryContent = getMemoryContent();
+
+      // 发送给 AI 生成记忆
+      const reply = await askAIModel(
+        [
+          {
+            role: "user",
+            content: memoryContent,
+          },
+        ],
+        systemPrompt,
+        userContext,
+      );
+
+      memorySpinner.succeed();
+      console.log("");
+      logger.log("助手 > ", "green");
+      logger.logmarkdown(reply);
+    } catch (error) {
+      memorySpinner.fail();
+      console.log("");
+      logger.log(`生成记忆失败: ${error.message}`, "red");
     }
 
     console.log("");
