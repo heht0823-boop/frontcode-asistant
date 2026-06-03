@@ -7,6 +7,8 @@ import bash from "./bash.js";
 import confirm from "./confirm.js";
 import glob from "./glob.js";
 import grep from "./grep.js";
+import memoryGet from "./memory_get.js";
+import memorySave from "./memory_save.js";
 import readFileTool from "./read_file.js";
 import select from "./select.js";
 import skill from "./skill.js";
@@ -22,6 +24,8 @@ const localToolModules = [
   glob,
   confirm,
   select,
+  memoryGet,
+  memorySave,
 ];
 
 /**
@@ -39,7 +43,6 @@ export default function getLocalTool() {
   localTools.tools.forEach((tool) => {
     localMap[tool.name] = localClient;
   });
-
   return {
     localTools: localTools.tools,
     localMap,

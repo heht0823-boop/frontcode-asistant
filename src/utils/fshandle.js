@@ -3,8 +3,8 @@
  * 提供对话历史的保存、读取和管理功能
  */
 import { writeFile, readFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { getCurrentWorkingDir } from "./pathUtils.js";
+import { basename, join } from "path";
+import { getCurrentWorkingDir, getUserHomeDir } from "./pathUtils.js";
 
 /** 历史记录目录路径 */
 const FRONT_DIR = join(getCurrentWorkingDir(), "src", ".front", "userHistory");
@@ -12,11 +12,20 @@ const FRONT_DIR = join(getCurrentWorkingDir(), "src", ".front", "userHistory");
 /** 历史记录文件路径 */
 const HISTORY_FILE = join(FRONT_DIR, "userHistory.json");
 
+/** 用户目录下按项目归档的历史记录目录 */
+const ARCHIVE_HISTORY_DIR = join(
+  getUserHomeDir(),
+  ".front",
+  "history",
+  basename(getCurrentWorkingDir()),
+);
+
 /**
  * 确保历史记录目录存在
  */
 async function ensureDirExists() {
   await mkdir(FRONT_DIR, { recursive: true });
+  await mkdir(ARCHIVE_HISTORY_DIR, { recursive: true });
 }
 
 /**
@@ -26,11 +35,21 @@ async function ensureDirExists() {
  */
 export async function saveHistory(history) {
   await ensureDirExists();
+  const timestamp = new Date().toISOString();
   const data = {
     history,
-    timestamp: new Date().toISOString(),
+    timestamp,
   };
+
   await writeFile(HISTORY_FILE, JSON.stringify(data, null, 2), "utf-8");
+
+  if (history.length > 0) {
+    const archivePath = join(
+      ARCHIVE_HISTORY_DIR,
+      `${Date.parse(timestamp)}.json`,
+    );
+    await writeFile(archivePath, JSON.stringify(history, null, 2), "utf-8");
+  }
 }
 
 /**

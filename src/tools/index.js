@@ -13,7 +13,16 @@ let registryPromise = null;
  * @returns {Promise<{tools: Array<Object>, toolNameMap: Object, errors: Array<string>}>} 工具注册表
  */
 async function createToolRegistry() {
-  const { localTools, localMap } = getLocalTool();
+  const localRegistry = await getLocalTool();
+  const localTools = Array.isArray(localRegistry?.localTools)
+    ? localRegistry.localTools
+    : [];
+  const localMap = localRegistry?.localMap || {};
+
+  if (!Array.isArray(localRegistry?.localTools)) {
+    console.warn("本地工具注册表格式异常，已使用空工具列表兜底。");
+  }
+
   const tools = [...localTools];
   const toolNameMap = { ...localMap };
   const errors = await linkMcpAndListTool(tools, toolNameMap);

@@ -173,6 +173,40 @@ function parseTaggedSection(text, tag) {
 }
 
 /**
+ * 从原始输入中解析命令名。
+ * @param {string} command - 可能经过选择器处理的命令
+ * @param {string} message - 用户原始消息
+ * @returns {string} 命令名或原始输入
+ */
+function getCommandName(command, message) {
+  if (message.startsWith("/")) {
+    return message.split(/\s+/u)[0];
+  }
+
+  return command;
+}
+
+/**
+ * 安全执行本地向量检索，失败时只返回空上下文。
+ * @param {string} promptText - 用户问题
+ * @returns {Promise<string>} 检索上下文
+ */
+async function buildVectorContext(promptText) {
+  try {
+    const vectorResults = await searchLocalVector(promptText);
+
+    if (!vectorResults || vectorResults.length === 0) {
+      return "";
+    }
+
+    return `【检索到的相关文档】\n${vectorResults.join("\n\n")}`;
+  } catch (error) {
+    console.warn(`向量检索失败，已跳过: ${error.message}`);
+    return "";
+  }
+}
+
+/**
  * 更新规格文档并生成执行规划
  * @param {string} requirement - 用户需求
  * @param {string} spec - 当前规格文档
@@ -411,8 +445,10 @@ export async function handleCommand(
   systemPrompt,
   userContext,
 ) {
+  const commandName = getCommandName(command, message);
+
   // 退出命令
-  if (command === "/exit") {
+  if (commandName === "/exit") {
     console.log("");
     const saveSpinner = ora({
       text: "正在保存对话历史...",
@@ -433,13 +469,13 @@ export async function handleCommand(
   }
 
   // 帮助命令
-  if (command === "/help") {
+  if (commandName === "/help") {
     renderHelp();
     return { exit: false };
   }
 
   // 向量化命令
-  if (command === "/vector") {
+  if (commandName === "/vector") {
     console.log("");
 
     // 提取文件名参数（移除 /vector 前缀）
@@ -482,7 +518,7 @@ export async function handleCommand(
   }
 
   // 记忆命令
-  if (command === "/memory") {
+  if (commandName === "/memory") {
     console.log("");
     const memorySpinner = ora({
       text: "正在生成记忆...",
@@ -520,7 +556,7 @@ export async function handleCommand(
   }
 
   // 上下文命令
-  if (command === "/context") {
+  if (commandName === "/context") {
     console.log("");
     logger.log(
       `当前上下文共 ${history.length} 条消息，待发送文件 ${attachedFiles.length} 个。`,
@@ -531,9 +567,10 @@ export async function handleCommand(
   }
 
   // 清空命令
-  if (command === "/clear") {
+  if (commandName === "/clear") {
     history.length = 0;
     attachedFiles.length = 0;
+    await saveHistory(history);
     console.log("");
     logger.log("当前对话上下文和文件附件已清空。", "yellow");
     console.log("");
@@ -544,7 +581,7 @@ export async function handleCommand(
   const isSpecCommand = message.startsWith("/spec ");
   const promptText = isSpecCommand ? extractSpecRequest(message) : message;
 
-  if (command === "/spec" && !isSpecCommand) {
+  if (commandName === "/spec" && !isSpecCommand) {
     logger.log(
       "请使用 /spec 加上需求，例如: /spec 增加文件选择上下文能力",
       "yellow",
@@ -561,13 +598,9 @@ export async function handleCommand(
 
   try {
     // 向量检索：查找相关文档作为上下文（不存储到历史）
-    let vectorContext = "";
-    if (!isSpecCommand) {
-      const vectorResults = await searchLocalVector(promptText);
-      if (vectorResults && vectorResults.length > 0) {
-        vectorContext = "【检索到的相关文档】\n" + vectorResults.join("\n\n");
-      }
-    }
+    const vectorContext = isSpecCommand
+      ? ""
+      : await buildVectorContext(promptText);
 
     // 合并用户上下文和向量检索结果
     const combinedContext = userContext
@@ -601,6 +634,7 @@ export async function handleCommand(
     });
     history.push({ role: "assistant", content: reply });
     attachedFiles.length = 0;
+    await saveHistory(history);
 
     spinner.succeed();
     console.log("");

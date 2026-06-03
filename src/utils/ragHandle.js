@@ -4,16 +4,17 @@ import path from "path";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import mammoth from "mammoth";
 import * as lancedb from "@lancedb/lancedb";
-import createOpenAIClient from "../request/index.js";
+import createOpenAIClient from "../request/client.js";
 import { getUserHomeDir, getCurrentWorkingDir } from "./pathUtils.js";
 
-// 支持的文档扩展名，仅允许文本类文件,也就是只允许用的文档用这些格式
+/** 支持的文档扩展名，仅允许文本类文件。 */
 const ALLOWED_EXTENSIONS = [".md", ".txt", ".docx"];
 
-// 获取到目录下的所有文件，比如我们这样调用它 getFilesFromDir("user/.front/doc")
-//就会获取到user目录下，.front下doc里的所有文件组成的数组
-//比如
-// [C:\Users\Administrator\.front\doc\公司门店.txt,C:\Users\Administrator\.front\doc\考勤制度.docx]
+/**
+ * 获取目录下允许向量化的文档文件。
+ * @param {string} dir - 文档目录
+ * @returns {string[]} 文档文件路径列表
+ */
 export function getFilesFromDir(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs
@@ -55,7 +56,11 @@ export async function readFileContent(filePaths) {
   );
 }
 
-// 调用大模型接口将文本转为向量
+/**
+ * 调用大模型接口将文本转为向量。
+ * @param {string} text - 需要向量化的文本
+ * @returns {Promise<number[]|undefined>} 向量结果
+ */
 export async function getEmbeddings(text) {
   if (!text) return;
   const openai = await createOpenAIClient();
@@ -67,8 +72,8 @@ export async function getEmbeddings(text) {
 }
 
 /**
- * 获取用户目录和当前工作目录下 .front/doc 文件夹中的所有文档内容
- *
+ * 获取用户目录和当前工作目录下 .front/doc 文件夹中的所有文档内容。
+ * @returns {Promise<{userDocArr: Array<Object>, currentDirDocArr: Array<Object>}>} 文档内容
  */
 export async function getAllRagFile() {
   //获取user目录和当前工作目录
@@ -92,7 +97,9 @@ export async function getAllRagFile() {
 }
 
 /**
- * 将文件内容数组转为向量
+ * 将文件内容数组转为向量。
+ * @param {Array<{path: string, content: string}>} fileArr - 文件内容数组
+ * @returns {Promise<Array<{vector: number[], text: string, path: string}>>} 向量数据
  */
 export async function filesToEmbedding(fileArr) {
   if (!Array.isArray(fileArr) || fileArr.length === 0) return [];
@@ -216,7 +223,8 @@ export async function searchFileAndStoreIn(fileName) {
 }
 
 /**
- * 读取所有文档并转为向量后存入 LanceDB
+ * 读取所有文档并转为向量后存入 LanceDB。
+ * @returns {Promise<void>}
  */
 export async function storeAllFilesIn() {
   //获取到user和当前目录下的所有文件
@@ -242,9 +250,6 @@ export async function storeAllFilesIn() {
 export async function searchLocalVector(queryText) {
   if (!queryText || typeof queryText !== "string") return [];
 
-  const vector = await getEmbeddings(queryText);
-  if (!vector || !Array.isArray(vector)) return [];
-
   const userDbPath = path.join(getUserHomeDir(), ".front", "langcedb-data");
   const currentDbPath = path.join(
     getCurrentWorkingDir(),
@@ -252,6 +257,13 @@ export async function searchLocalVector(queryText) {
     ".front",
     "langcedb-data",
   );
+
+  if (!fs.existsSync(userDbPath) && !fs.existsSync(currentDbPath)) {
+    return [];
+  }
+
+  const vector = await getEmbeddings(queryText);
+  if (!vector || !Array.isArray(vector)) return [];
 
   let userResults = [];
   let currentResults = [];

@@ -13,9 +13,10 @@ import inquirer from "inquirer";
 import "dotenv/config";
 import { loadValidatedConfig } from "./utils/config.js";
 import { welcome } from "./utils/init.js";
-import { saveHistory } from "./utils/fshandle.js";
+import { loadHistory, saveHistory } from "./utils/fshandle.js";
 import { selectCommand, selectFile } from "./utils/interactive.js";
 import { readSystem, getUserContext, readRules } from "./utils/contextRead.js";
+import { createSessionState } from "./utils/session.js";
 import {
   commands,
   ensureSpecFile,
@@ -23,14 +24,8 @@ import {
   chooseFileAttachment,
 } from "./commands/index.js";
 
-// 启动时一次性读取提示词（避免每次调用都读取文件）
-const systemPrompt = readSystem();
-const userContext = getUserContext();
-const rules = readRules();
-
-// 对话历史和文件附件（模块级别以便信号处理器访问）
-const history = [];
-const attachedFiles = [];
+/** 当前终端会话状态，初始化后供退出信号处理器保存历史。 */
+let session = null;
 
 /**
  * 优雅退出处理
@@ -38,7 +33,7 @@ const attachedFiles = [];
 async function gracefulShutdown() {
   console.log("\n正在保存对话历史...");
   try {
-    await saveHistory(history);
+    await saveHistory(session?.history || []);
     console.log("对话历史已保存。再见！");
   } catch (error) {
     console.error("保存对话历史失败:", error.message);
@@ -56,6 +51,15 @@ process.on("SIGINT", gracefulShutdown);
 async function startChat() {
   // 验证并加载配置，支持 settings.json 和 .env 两种来源
   const config = await loadValidatedConfig();
+  const history = await loadHistory();
+
+  session = createSessionState({
+    history,
+    systemPrompt: readSystem(),
+    userContext: getUserContext(),
+    rules: readRules(),
+    config,
+  });
 
   // 确保规格文档存在
   await ensureSpecFile();
@@ -84,7 +88,11 @@ async function startChat() {
     // 处理文件选择（@ 符号）
     if (message.includes("@")) {
       try {
-        await chooseFileAttachment(message, attachedFiles, rules);
+        await chooseFileAttachment(
+          message,
+          session.attachedFiles,
+          session.rules,
+        );
       } catch (error) {
         console.log(`文件选择失败: ${error.message}`);
       }
@@ -102,13 +110,13 @@ async function startChat() {
     const result = await handleCommand(
       command,
       message,
-      history,
-      attachedFiles,
+      session.history,
+      session.attachedFiles,
       saveHistory,
       selectCommand,
       selectFile,
-      systemPrompt,
-      userContext,
+      session.systemPrompt,
+      session.userContext,
     );
 
     // 退出标志

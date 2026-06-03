@@ -1,3 +1,6 @@
 node_modules/
 .env
 src/.front/userHistory/
+.front/
+.front.md
+record.json

@@ -4,10 +4,13 @@
 import { loadConfig } from "../utils/config.js";
 import { executeTool, getToolRegistry } from "../tools/index.js";
 import { transformToOpenAi } from "../tools/util.js";
-import { createOpenAIClient } from "./index.js";
+import { createOpenAIClient } from "./client.js";
 
 /** 单次请求最多允许连续工具调用的轮数，避免模型陷入循环。 */
 const maxToolRounds = 5;
+
+/** 已输出过的工具注册错误，避免每轮请求重复刷屏。 */
+const warnedRegistryErrors = new Set();
 
 /**
  * 解析工具调用参数。
@@ -44,7 +47,12 @@ export async function askAIModel(
   // 获取统一工具注册表（本地工具 + MCP 工具）
   const registry = await getToolRegistry();
   if (registry.errors.length > 0) {
-    registry.errors.forEach((error) => console.warn(error));
+    registry.errors.forEach((error) => {
+      if (!warnedRegistryErrors.has(error)) {
+        console.warn(error);
+        warnedRegistryErrors.add(error);
+      }
+    });
   }
 
   // 合并外部工具和本地工具，并转换为 OpenAI 格式
