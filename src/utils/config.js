@@ -4,10 +4,13 @@ import { getUserHomeDir, getCurrentWorkingDir } from "./pathUtils.js";
 
 /**
  * 加载应用配置
- * 配置读取优先级（从高到低）：
- * 1. 当前终端目录下的 settings.json
- * 2. 用户目录下的 .front/settings.json
- * 3. .env 环境变量
+ * 配置读取策略：
+ * - settings.json：用于非敏感配置（model、baseURL、mcpServer 等）
+ * - .env 环境变量：用于敏感信息（API Key），优先级最高
+ *
+ * 安全说明：
+ * API Key 应该只放在 .env 文件中，永远不要提交到 Git。
+ * settings.json 中的 apiKey 将被忽略并给出警告。
  *
  * @returns {Object} 配置对象，包含 apiKey、baseURL、model
  */
@@ -20,21 +23,32 @@ export async function loadConfig() {
     join(getUserHomeDir(), ".front", "settings.json"),
   ];
 
-  // 尝试读取配置文件
+  // 尝试读取配置文件（仅用于非敏感配置）
   for (const configPath of configPaths) {
     try {
       const data = await readFile(configPath, "utf-8");
       const fileConfig = JSON.parse(data);
-      Object.assign(config, fileConfig);
+
+      // 如果 settings.json 中包含 apiKey，发出警告并忽略
+      if (fileConfig.apiKey) {
+        console.warn(
+          `[安全警告] ${configPath} 中包含了 API Key，请将其移至 .env 文件。` +
+          "settings.json 中的 apiKey 已被忽略。",
+        );
+      }
+
+      // 只复制非敏感配置
+      const { apiKey, ...safeConfig } = fileConfig;
+      Object.assign(config, safeConfig);
     } catch {
       // 文件不存在或读取失败，继续尝试下一个
     }
   }
 
-  // 使用环境变量作为最终备选（优先级最低）
-  config.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
-  config.baseURL = config.baseURL || process.env.OPENAI_API_BASE_URL;
-  config.model = config.model || process.env.OPENAI_MODEL || "gpt-5-mini";
+  // 从 .env 环境变量读取敏感配置（优先级最高）
+  config.apiKey = process.env.OPENAI_API_KEY || config.apiKey;
+  config.baseURL = process.env.OPENAI_API_BASE_URL || config.baseURL;
+  config.model = process.env.OPENAI_MODEL || config.model || "gpt-5-mini";
 
   return config;
 }

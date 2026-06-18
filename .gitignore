@@ -1,6 +1,25 @@
+# 依赖目录
 node_modules/
+
+# 环境变量和密钥文件（永远不要提交）
 .env
-src/.front/userHistory/
+.env.local
+*.token
+secret*.js
+settings.json
+*.settings.json
+
+# 本地运行时生成的数据目录（包含密钥、记忆、历史记录）
 .front/
-.front.md
+src/.front/
+
+# 历史记录
+src/.front/userHistory/
 record.json
+
+# 用户配置
+.front.md
+
+# 备份文件
+.git.backup/
+*.backup/
